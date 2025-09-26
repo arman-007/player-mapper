@@ -1,0 +1,13 @@
+{
+  "player_id": {
+    "$oid": "688f4707bd4cf1cc53c2d108"
+  },
+  "player_api_id": 154421,
+  "player_db_name": "Erling Håland",
+  "player_fanduel_name": "Erling Haaland",
+  "created_at": {
+    "$date": "2025-09-08T21:46:33.544Z"
+  },
+  "match_score": 1,
+  "match_type": "runtime"
+}
