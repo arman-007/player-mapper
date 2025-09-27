@@ -12,16 +12,10 @@ This repository extracts names from source JSONs, performs deterministic matchin
 - [Repository layout](#repository-layout)  
 - [Prerequisites](#prerequisites)  
 - [Quick setup (Linux / macOS)](#quick-setup-linux--macos)  
-- [Quick setup (Windows — CMD / PowerShell / WSL / Git Bash)](#quick-setup-windows---cmd--powershell--wsl--git-bash)  
-- [requirements.txt (suggested)](#requirementstxt-suggested)  
 - [Run the pipeline](#run-the-pipeline)  
   - [Using `run_all.sh` (Linux / WSL / Git Bash)](#using-run_allsh-linux--wsl--git-bash)  
-  - [Windows (no Bash) — run scripts manually or use `run_all.bat` sample](#windows-no-bash----run-scripts-manually-or-use-run_allbat-sample)  
   - [Stage 3 options (fuzzy matcher)](#stage-3-options-fuzzy-matcher)  
 - [Outputs you will get](#outputs-you-will-get)  
-- [Troubleshooting & tips](#troubleshooting--tips)  
-- [Recommended next steps / improvements](#recommended-next-steps--improvements)  
-- [License](#license)
 
 ---
 
@@ -36,9 +30,9 @@ Pipeline stages:
      - raw `name` list (`intermediary_files/fantasy_player_names.csv`)
      - EPL runner names (`intermediary_files/epl_player_names.csv`)
 
-2. **Deterministic mapping** — `final.py` (or your renamed deterministic mapper `final_chatgpt.py`) attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/individual_player.json`. It also writes "not found" CSVs for leftovers.
+2. **Deterministic mapping** — `final.py` attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/individual_player.json`. It also writes "not found" CSVs for leftovers.
 
-3. **Fuzzy matching** — `stage3_fuzzy.py` (aka `final_fuzzy_matcher_chatgpt.py`) runs a token/surname/fuzzy scoring algorithm over the remaining unmatched names to increase coverage. It supports:
+3. **Fuzzy matching** — `final_fuzzy_matcher.py` runs a token/surname/fuzzy scoring algorithm over the remaining unmatched names to increase coverage. It supports:
    - `--threshold` (default: `70`) to accept matches.
    - `--dry-run` (`-n`) to simulate exports without modifying `individual_player.json`.
 
@@ -73,7 +67,6 @@ Example layout (update if your repo differs):
 
 - **Python 3.8+** (3.9/3.10/3.11 recommended)
 - `pip` for package installation
-- (Optional) Git for cloning
 - (Optional on Windows) WSL or Git Bash to run `run_all.sh` directly
 
 ---
@@ -94,45 +87,6 @@ pip install -r requirements.txt
 
 # 4. Verify rapidfuzz (optional)
 python -c "import rapidfuzz; print('rapidfuzz', rapidfuzz.__version__)"
-```
-
----
-
-## Quick setup (Windows — CMD / PowerShell / WSL / Git Bash)
-
-### Windows (CMD)
-```cmd
-python -m venv venv
-venv\Scripts\activate.bat
-pip install -r requirements.txt
-```
-
-### Windows (PowerShell)
-```powershell
-python -m venv venv
-# If you get an ExecutionPolicy error, run (Administratively) or set process-locally:
-# Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-### Windows (WSL or Git Bash)
-If you run a Bash-like shell, follow the Linux/macOS steps above.
-
----
-
-## `requirements.txt` (suggested)
-
-Minimal `requirements.txt` content:
-
-```
-rapidfuzz>=3.0.0
-```
-
-> `rapidfuzz` is strongly recommended (fast and accurate). If it’s not installed, the fuzzy module falls back to Python's `difflib` (slower / less accurate). To pin exact versions for reproducibility:
-
-```bash
-pip freeze > requirements.txt
 ```
 
 ---
@@ -159,30 +113,6 @@ chmod +x run_all.sh
 ./run_all.sh
 ```
 
-> If your deterministic mapping script is `final.py` and fuzzy script is `final_fuzzy_matcher.py`, update `run_all.sh` accordingly.
-
-### Windows (no Bash) — run scripts manually or use `run_all.bat` sample
-
-If you cannot run Bash on Windows, run scripts one-by-one in the activated venv:
-
-```powershell
-# After activating venv
-python fetch_all_player_names.py
-python final.py                              # or final_chatgpt.py
-python final_fuzzy_matcher.py --threshold 50        # or final_fuzzy_matcher_chatgpt.py --threshold 50
-```
-
-**Sample `run_all.bat`** (save alongside repo):
-
-```bat
-@echo off
-echo Starting execution of Python scripts...
-call venv\Scripts\activate.bat
-python fetch_all_player_names.py
-python final.py
-python final_fuzzy_matcher.py --threshold 50
-pause
-```
 
 ### Stage 3 options (fuzzy matcher)
 
@@ -222,36 +152,3 @@ python final_fuzzy_matcher.py --threshold 50 --dry-run
 - `intermediary_files/remaining_fantasy_display_names_after_fuzzy.csv` — remaining fantasy names after fuzzy stage.
 
 ---
-
-## Troubleshooting & tips
-
-- **Mismatch between counts and exported records**  
-  If you see counts (e.g., "Number of common players") larger than the number of export records, it usually indicates inconsistent normalization between the CSVs and the full JSON lookup. Make sure the same normalization function is used across extraction and matching stages.
-
-- **Rapidfuzz not installed**  
-  If `rapidfuzz` is unavailable, the fuzzy script will fall back to `difflib`. Install `rapidfuzz` for better accuracy and performance:
-  ```bash
-  pip install rapidfuzz
-  ```
-
-- **Windows path / encoding issues**  
-  Always open files with `encoding="utf-8"`. If you see `UnicodeEncodeError` or similar, set your terminal to UTF-8 or run via WSL/Git Bash.
-
-- **Duplicate prevention**  
-  Export logic avoids duplicates by checking the `id` field when present. If you re-run the pipeline and want a fresh result, delete `output_files/individual_player.json` before running.
-
-- **Inspect borderline matches**  
-  For matches with score just below threshold, consider lowering threshold slightly or exporting them to a `needs_review.csv` for manual verification.
-
----
-
-## Recommended next steps / improvements
-
-- Add `matched_by` and `match_score` provenance fields to each exported player object to make auditing easy.
-- Use team/club information (if available) to disambiguate common names.
-- Introduce a small `aliases.json` mapping for common name variants and nicknames.
-- Provide an interactive review UI (HTML or simple CLI) for borderline fuzzy matches (e.g., 50–75).
-- Add unit tests for normalization and matching logic.
-
----
-
