@@ -30,11 +30,11 @@ Pipeline stages:
      - raw `name` list (`intermediary_files/fantasy_player_names.csv`)
      - EPL runner names (`intermediary_files/epl_player_names.csv`)
 
-2. **Deterministic mapping** — `exact_match_mapper.py` attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/individual_player.json`. It also writes "not found" CSVs for leftovers.
+2. **Deterministic mapping** — `exact_match_mapper.py` attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/mapped_players.json`. It also writes "not found" CSVs for leftovers.
 
 3. **Fuzzy matching** — `fuzzy_matcher.py` runs a token/surname/fuzzy scoring algorithm over the remaining unmatched names to increase coverage. It supports:
    - `--threshold` (default: `70`) to accept matches.
-   - `--dry-run` (`-n`) to simulate exports without modifying `individual_player.json`.
+   - `--dry-run` (`-n`) to simulate exports without modifying `mapped_players.json`.
 
 ---
 
@@ -53,7 +53,7 @@ Example layout (update if your repo differs):
 │   ├── fantasy_player_names.csv
 │   └── fuzzy_mapping_results.json
 ├── output_files/
-│   └── individual_player.json
+│   └── mapped_players.json
 ├── fetch_all_player_names.py
 ├── exact_match_mapper.py
 ├── fuzzy_matcher.py
@@ -68,7 +68,6 @@ Example layout (update if your repo differs):
 - **Python 3.8+** (3.9/3.10/3.11 recommended)
 - `pip` for package installation
 - (Optional on Windows) WSL or Git Bash to run `run_all.sh` directly
-
 ---
 
 ## Quick setup (Linux / macOS)
@@ -119,7 +118,7 @@ chmod +x run_all.sh
 `fuzzy_matcher.py` supports:
 
 - `--threshold`, `-t` : float in range 0–100. Default `70`. Lowering increases matches but may add false positives.
-- `--dry-run`, `-n` : simulate the export; do not modify `output_files/individual_player.json`.
+- `--dry-run`, `-n` : simulate the export; do not modify `output_files/mapped_players.json`.
 
 Examples:
 
@@ -141,7 +140,7 @@ python fuzzy_matcher.py --threshold 50 --dry-run
 
 ## Outputs you will get
 
-- `output_files/individual_player.json` — list of exported fantasy player objects (deterministic + fuzzy).
+- `output_files/mapped_players.json` — list of exported fantasy player objects (deterministic + fuzzy).
 - `intermediary_files/epl_player_names.csv` — extracted EPL runner names.
 - `intermediary_files/fantasy_player_display_names.csv` — normalized/transliterated fantasy display names.
 - `intermediary_files/fantasy_player_names.csv` — raw fantasy `name` field list.

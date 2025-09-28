@@ -1,6 +1,7 @@
 import json
 import os
 import unicodedata
+import datetime
 
 
 def load_csv(file_path):
@@ -37,9 +38,41 @@ def normalize_name(text):
     # Apply transliteration map and lower-case for robust matching:
     return "".join(TRANSLIT_MAP.get(c, c) for c in text).lower().strip()
 
-def export_individual_player(player):
-    file_path = "output_files/individual_player.json"
+def transliterate(text):
+    if text is None:
+        return None
+    s = strip_accents(text)
+    return "".join(TRANSLIT_MAP.get(c, c) for c in s)
+
+def prepare_export_player(raw_player):
+    # Build reduced object
+    db_name = raw_player.get("display_name") or raw_player.get("name") or raw_player.get("common_name")
+    fanduel_name = transliterate(db_name) if db_name else None
+    player_api_id = raw_player.get("api_player_id") or raw_player.get("player_api_id")
+    player_id = raw_player.get("_id")
+
+    try:
+        created_iso = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    except TypeError:
+        created_iso = datetime.datetime.utcnow().isoformat() + "Z"
+
+    return {
+        "player_id": player_id,
+        "player_api_id": player_api_id,
+        "player_db_name": db_name,
+        "player_fanduel_name": fanduel_name,
+        "created_at": {"$date": created_iso}
+    }
+
+def export_individual_player(raw_player):
+    """
+    Transform raw fantasy player into reduced dict and append to output_files/mapped_players.json.
+    Duplicate detection by player_api_id (preferred), else _id.$oid, else exact object.
+    """
+    exported = prepare_export_player(raw_player)
+    file_path = "output_files/mapped_players.json"
     players = []
+
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             try:
@@ -49,15 +82,27 @@ def export_individual_player(player):
             except json.JSONDecodeError:
                 players = []
 
-    player_id = player.get("id")
-    if player_id is not None:
-        if any(isinstance(p, dict) and p.get("id") == player_id for p in players):
-            return False  # already present
-    else:
-        if player in players:
-            return False
+    api_id = exported.get("player_api_id")
+    db_oid = None
+    pid = exported.get("player_id")
+    if isinstance(pid, dict):
+        db_oid = pid.get("$oid") or pid.get("oid") or None
 
-    players.append(player)
+    duplicate = False
+    if api_id is not None:
+        duplicate = any(isinstance(p, dict) and p.get("player_api_id") == api_id for p in players)
+    elif db_oid:
+        duplicate = any(isinstance(p, dict)
+                        and isinstance(p.get("player_id"), dict)
+                        and p.get("player_id").get("$oid") == db_oid
+                        for p in players)
+    else:
+        duplicate = exported in players
+
+    if duplicate:
+        return False
+
+    players.append(exported)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(players, f, indent=4, ensure_ascii=False)
@@ -134,7 +179,7 @@ if "__main__" == __name__:
     fantasy_full_data = load_json("input_files/Fantasy_LiveScoring.players.json")
 
     try:
-        os.remove("output_files/individual_player.json")
+        os.remove("output_files/mapped_players.json")
     except FileNotFoundError:
         pass
 

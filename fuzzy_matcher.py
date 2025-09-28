@@ -4,6 +4,7 @@ import unicodedata
 import re
 import argparse
 from difflib import SequenceMatcher
+import datetime
 
 
 try:
@@ -107,12 +108,38 @@ def map_players(epl_list, fantasy_list, threshold=70):
         })
     return results
 
-def export_individual_player(player, file_path="output_files/individual_player.json", dry_run=False):
+def transliterate(text):
+    if text is None:
+        return None
+    s = unicodedata.normalize("NFKD", text)
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s
+
+def prepare_export_player(raw_player):
+    db_name = raw_player.get("display_name") or raw_player.get("name") or raw_player.get("common_name")
+    fanduel_name = transliterate(db_name) if db_name else None
+    player_api_id = raw_player.get("api_player_id") or raw_player.get("player_api_id")
+    player_id = raw_player.get("_id")
+
+    try:
+        created_iso = datetime.datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+    except TypeError:
+        created_iso = datetime.datetime.utcnow().isoformat() + "Z"
+
+    return {
+        "player_id": player_id,
+        "player_api_id": player_api_id,
+        "player_db_name": db_name,
+        "player_fanduel_name": fanduel_name,
+        "created_at": {"$date": created_iso}
+    }
+
+def export_individual_player(raw_player, file_path="output_files/mapped_players.json", dry_run=False):
     """
-    Attempts to export `player` to file_path.
-    - If dry_run=True, do NOT modify the file; just return True if it would be exported (i.e. not a duplicate).
-    - Duplicate detection is performed against the current contents of file_path.
+    Export reduced player object (not full raw dict).
+    Duplicate detection via player_api_id or player_id.$oid.
     """
+    exported = prepare_export_player(raw_player)
     players = []
     if os.path.exists(file_path):
         try:
@@ -123,18 +150,30 @@ def export_individual_player(player, file_path="output_files/individual_player.j
         except json.JSONDecodeError:
             players = []
 
-    player_id = player.get("id")
-    if player_id is not None:
-        if any(isinstance(p, dict) and p.get("id") == player_id for p in players):
-            return False
+    api_id = exported.get("player_api_id")
+    db_oid = None
+    pid = exported.get("player_id")
+    if isinstance(pid, dict):
+        db_oid = pid.get("$oid") or pid.get("oid") or None
+
+    duplicate = False
+    if api_id is not None:
+        duplicate = any(isinstance(p, dict) and p.get("player_api_id") == api_id for p in players)
+    elif db_oid:
+        duplicate = any(isinstance(p, dict)
+                        and isinstance(p.get("player_id"), dict)
+                        and p.get("player_id").get("$oid") == db_oid
+                        for p in players)
     else:
-        if player in players:
-            return False
+        duplicate = exported in players
+
+    if duplicate:
+        return False
 
     if dry_run:
         return True
 
-    players.append(player)
+    players.append(exported)
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(players, f, indent=4, ensure_ascii=False)
@@ -159,7 +198,7 @@ def run_stage3(
     threshold=70,
     dry_run=False
 ):
-    mode = "DRY-RUN (no changes to individual_player.json)" if dry_run else "LIVE (will write to individual_player.json)"
+    mode = "DRY-RUN (no changes to mapped_players.json)" if dry_run else "LIVE (will write to mapped_players.json)"
     print(f"Running fuzzy stage with threshold = {threshold} — {mode}")
     epl_list = load_csv(epl_leftover_csv)
     fantasy_pool = load_csv(fantasy_pool_csv)
@@ -229,7 +268,7 @@ def run_stage3(
     if dry_run:
         print(f"DRY-RUN: {exported_count} player(s) would have been exported (no files modified).")
     else:
-        print(f"Fuzzy stage done. Exported {exported_count} new player(s) to output_files/individual_player.json")
+        print(f"Fuzzy stage done. Exported {exported_count} new player(s) to output_files/mapped_players.json")
 
 def parse_threshold(x):
     try:
@@ -245,6 +284,6 @@ if __name__ == "__main__":
     parser.add_argument("--threshold", "-t", type=parse_threshold, default=70,
                         help="Acceptance threshold (0-100). Defaults to 70.")
     parser.add_argument("--dry-run", "-n", action="store_true",
-                        help="Perform a dry run: do NOT modify output_files/individual_player.json. Mapping results still written for inspection.")
+                        help="Perform a dry run: do NOT modify output_files/mapped_players.json. Mapping results still written for inspection.")
     args = parser.parse_args()
     run_stage3(threshold=args.threshold, dry_run=args.dry_run)
