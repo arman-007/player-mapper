@@ -30,9 +30,9 @@ Pipeline stages:
      - raw `name` list (`intermediary_files/fantasy_player_names.csv`)
      - EPL runner names (`intermediary_files/epl_player_names.csv`)
 
-2. **Deterministic mapping** — `final.py` attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/individual_player.json`. It also writes "not found" CSVs for leftovers.
+2. **Deterministic mapping** — `exact_match_mapper.py` attempts exact matches between the EPL names and fantasy display/name CSVs and writes matched player objects into `output_files/individual_player.json`. It also writes "not found" CSVs for leftovers.
 
-3. **Fuzzy matching** — `final_fuzzy_matcher.py` runs a token/surname/fuzzy scoring algorithm over the remaining unmatched names to increase coverage. It supports:
+3. **Fuzzy matching** — `fuzzy_matcher.py` runs a token/surname/fuzzy scoring algorithm over the remaining unmatched names to increase coverage. It supports:
    - `--threshold` (default: `70`) to accept matches.
    - `--dry-run` (`-n`) to simulate exports without modifying `individual_player.json`.
 
@@ -55,8 +55,8 @@ Example layout (update if your repo differs):
 ├── output_files/
 │   └── individual_player.json
 ├── fetch_all_player_names.py
-├── final.py
-├── final_fuzzy_matcher.py
+├── exact_match_mapper.py
+├── fuzzy_matcher.py
 ├── run_all.sh
 └── README.md
 ```
@@ -102,8 +102,8 @@ python -c "import rapidfuzz; print('rapidfuzz', rapidfuzz.__version__)"
 echo "Starting execution of specific Python scripts..."
 
 python fetch_all_player_names.py
-python final.py
-python final_fuzzy_matcher.py --threshold 50
+python exact_match_mapper.py
+python fuzzy_matcher.py --threshold 50
 ```
 
 Make it executable and run:
@@ -116,7 +116,7 @@ chmod +x run_all.sh
 
 ### Stage 3 options (fuzzy matcher)
 
-`final_fuzzy_matcher.py` supports:
+`fuzzy_matcher.py` supports:
 
 - `--threshold`, `-t` : float in range 0–100. Default `70`. Lowering increases matches but may add false positives.
 - `--dry-run`, `-n` : simulate the export; do not modify `output_files/individual_player.json`.
@@ -125,16 +125,16 @@ Examples:
 
 ```bash
 # real run, default threshold 70
-python final_fuzzy_matcher.py
+python fuzzy_matcher.py
 
 # real run, accept looser matches (threshold 60)
-python final_fuzzy_matcher.py --threshold 60
+python fuzzy_matcher.py --threshold 60
 
 # dry run, no writes (simulate)
-python final_fuzzy_matcher.py --dry-run
+python fuzzy_matcher.py --dry-run
 
 # dry run with custom threshold
-python final_fuzzy_matcher.py --threshold 50 --dry-run
+python fuzzy_matcher.py --threshold 50 --dry-run
 ```
 
 ---

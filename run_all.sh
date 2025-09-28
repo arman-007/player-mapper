@@ -4,6 +4,6 @@ echo "Starting execution of specific Python scripts..."
 
 python fetch_all_player_names.py
 
-python final_chatgpt.py
+python exact_match_mapper.py
 
-python final_fuzzy_matcher_chatgpt.py --threshold 50
+python fuzzy_matcher.py --threshold 50

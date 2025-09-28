@@ -2,9 +2,7 @@ import json
 import os
 import unicodedata
 
-# -------------------------
-# I/O helpers
-# -------------------------
+
 def load_csv(file_path):
     names = []
     with open(file_path, "r", encoding="utf-8") as f:
@@ -16,9 +14,6 @@ def load_json(file_path):
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-# -------------------------
-# Normalization
-# -------------------------
 TRANSLIT_MAP = {
     "ı": "i",  # dotless i
     "İ": "I",  # capital dotted i
@@ -42,9 +37,6 @@ def normalize_name(text):
     # Apply transliteration map and lower-case for robust matching:
     return "".join(TRANSLIT_MAP.get(c, c) for c in text).lower().strip()
 
-# -------------------------
-# Export individual player (keeps previous behavior but avoids duplicates by 'id' when possible)
-# -------------------------
 def export_individual_player(player):
     file_path = "output_files/individual_player.json"
     players = []
@@ -57,13 +49,11 @@ def export_individual_player(player):
             except json.JSONDecodeError:
                 players = []
 
-    # Avoid adding exact duplicate by 'id' if present
     player_id = player.get("id")
     if player_id is not None:
         if any(isinstance(p, dict) and p.get("id") == player_id for p in players):
             return False  # already present
     else:
-        # fallback: avoid duplicate exact dict
         if player in players:
             return False
 
@@ -73,9 +63,6 @@ def export_individual_player(player):
         json.dump(players, f, indent=4, ensure_ascii=False)
     return True
 
-# -------------------------
-# Build normalized map from full fantasy data for quick lookups
-# -------------------------
 def build_normalized_map(full_fantasy_data, mapping_field):
     norm_map = {}
     for player in full_fantasy_data:
@@ -86,36 +73,29 @@ def build_normalized_map(full_fantasy_data, mapping_field):
         norm_map.setdefault(norm, []).append(player)
     return norm_map
 
-# -------------------------
-# Main mapping logic (uses normalized matching)
-# -------------------------
 def map_names(
-        fantasy_players_csv,   # list of display names (likely already normalized by earlier script)
+        fantasy_players_csv,
         epl_players,
         full_fantasy_data,
         mapping_field,
         file_name_not_found,
         output_file_name_remaining
     ):
-    # Normalize the fantasy CSV list as well (to be safe)
     fantasy_norm_list = [normalize_name(x) for x in fantasy_players_csv]
     fantasy_norm_set = set(fantasy_norm_list)
 
-    # Build normalized map from full JSON
     normalized_map = build_normalized_map(full_fantasy_data, mapping_field)
 
-    numbers_of_common_players = 0     # will count actual exported records
+    numbers_of_common_players = 0     
     numbers_of_players_not_found = 0
     not_found_players = []
 
-    # Keep track of which normalized fantasy names remain unmatched
     remaining_fantasy_norm = set(fantasy_norm_list)
 
     for epl_player in epl_players:
         norm_epl = normalize_name(epl_player)
 
         if norm_epl in fantasy_norm_set:
-            # it exists; now check if we have a full JSON record(s)
             if norm_epl in normalized_map:
                 matched_players = normalized_map[norm_epl]
                 exported_any = False
@@ -124,45 +104,35 @@ def map_names(
                     if exported:
                         numbers_of_common_players += 1
                         exported_any = True
-                # remove from remaining fantasy names
                 remaining_fantasy_norm.discard(norm_epl)
                 if not exported_any:
                     pass
             else:
-                # Present in CSV but we don't have detailed JSON record
                 numbers_of_players_not_found += 1
                 not_found_players.append(epl_player)
                 remaining_fantasy_norm.discard(norm_epl)
         else:
-            # Not present in fantasy csv at all
             numbers_of_players_not_found += 1
             not_found_players.append(epl_player)
 
     print(f"Number of common players (exported records): {numbers_of_common_players}")
     print(f"Number of players not found: {numbers_of_players_not_found}")
 
-    # Write not found epl players (raw)
     os.makedirs(os.path.dirname(file_name_not_found), exist_ok=True)
     with open(file_name_not_found, "w", encoding="utf-8") as f:
         for name in not_found_players:
             f.write(name + "\n")
 
-    # Write remaining fantasy display names (the normalized ones that were not matched)
     os.makedirs(os.path.dirname(output_file_name_remaining), exist_ok=True)
     with open(output_file_name_remaining, "w", encoding="utf-8") as f:
         for name in sorted(remaining_fantasy_norm):
             f.write(name + "\n")
 
-
-# -------------------------
-# CLI / entrypoint
-# -------------------------
 if "__main__" == __name__:
     fantasy_players_display_names = load_csv("intermediary_files/fantasy_player_display_names.csv")
     epl_players = load_csv("intermediary_files/epl_player_names.csv")
     fantasy_full_data = load_json("input_files/Fantasy_LiveScoring.players.json")
 
-    # remove old result file to start fresh each run
     try:
         os.remove("output_files/individual_player.json")
     except FileNotFoundError:
